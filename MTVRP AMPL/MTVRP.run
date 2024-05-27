@@ -1,0 +1,13 @@
+reset;
+
+model MTVRP1.mod;
+#data CMT11.dat;
+data Tiempos_CMT2-5V.dat;
+option solver Cplex;
+option cplex_options " timelimit=21600 nodefile=3";
+solve;
+
+#display X;
+#display Z;
+print _total_solve_time;
+display solve_result_num;

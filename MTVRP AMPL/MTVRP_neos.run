@@ -1,0 +1,3 @@
+#option solver Cplex;
+option cplex_options " timelimit=21600 mipdisplay=2";
+solve;
