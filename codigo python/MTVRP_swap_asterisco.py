@@ -35,6 +35,7 @@ def calcular_ahorros(Matriz_Coordenadas):
     ahorros = []
     for i in range(1, n):
         for j in range(i + 1, n):
+            #ahorro = Matriz_Coordenadas[i][0] + Matriz_Coordenadas[0][j] - LAMBDA * Matriz_Coordenadas[i][j]
             ahorro = Matriz_Coordenadas[i][0] + Matriz_Coordenadas[0][j] - Matriz_Coordenadas[i][j]
             ahorros.append((i, j, ahorro))
     return sorted(ahorros, key=lambda x: -x[2])
@@ -50,6 +51,7 @@ def metodo_de_ahorros(N, Tiempos, Requerimientos, Capacidad_Vehiculos):
 
         if ruta_i != ruta_j:
             capacidad_total = sum(Requerimientos[nodo] for nodo in ruta_i + ruta_j)
+            # BETA (EJEMPLO 0,5) X CAPACIDAD
             if capacidad_total <= Capacidad_Vehiculos:
                 nueva_ruta = ruta_i + ruta_j
                 rutas.remove(ruta_i)
