@@ -58,7 +58,6 @@ def metodo_de_ahorros(N, Tiempos, Requerimientos, Capacidad_Vehiculos):
 
     rutas = [[0] + ruta + [0] for ruta in rutas]
     return rutas
-
 # Funciones de cálculo de costos
 def calcular_costo(solucion, Tiempos):
     costo = 0
@@ -66,11 +65,7 @@ def calcular_costo(solucion, Tiempos):
         costo += Tiempos[solucion[i]][solucion[i + 1]]
     return costo
 
-def calcular_costo_total(rutas, Tiempos):
-    return sum(calcular_costo(ruta, Tiempos) for ruta in rutas)
-
 # Funciones de búsqueda de vecindarios y búsquedas Tabú
-
 def vecindario_swap_2(solucion, Tiempos):
     vecindario = []
     n = len(solucion)
@@ -177,35 +172,71 @@ def graficar_solucion(rutas, coordenadas, title):
     plt.grid(True)
     plt.show()
 
-# Función mejorada de swap inter rutas
-def swap_inter_rutas(rutas, Tiempos):
-    def calcular_costo_ruta(ruta, Tiempos):
-        costo = 0
-        for k in range(len(ruta) - 1):
-            costo += Tiempos[ruta[k]][ruta[k + 1]]
-        return costo
+def find_top_3(v, ruta, Tiempos):
+    costos = []
+    for i in range(len(ruta) - 1):
+        for j in range(i + 1, len(ruta)):
+            costos.append(((i, j), Tiempos[ruta[i]][v] + Tiempos[v][ruta[j]] - Tiempos[ruta[i]][ruta[j]]))
+    costos.sort(key=lambda x: x[1])
+    return [costos[k][0] for k in range(min(3, len(costos)))]
 
-    def calcular_costo_total(rutas, Tiempos):
-        return sum(calcular_costo_ruta(ruta, Tiempos) for ruta in rutas)
+def delta(v, v_p, v_s, Tiempos):
+    return Tiempos[v_p][v] + Tiempos[v][v_s] - Tiempos[v_p][v_s]
 
-    n_rutas = len(rutas)
-    mejor_costo_total = calcular_costo_total(rutas, Tiempos)
-    mejor_rutas = copy.deepcopy(rutas)
+def apply_swap(rutas, v_best, v_prime_best):
+    for i, ruta in enumerate(rutas):
+        if v_best in ruta:
+            idx_v_best = ruta.index(v_best)
+            ruta.remove(v_best)
+            break
+    for j, ruta in enumerate(rutas):
+        if v_prime_best in ruta:
+            idx_v_prime_best = ruta.index(v_prime_best)
+            ruta.remove(v_prime_best)
+            break
+    rutas[i].insert(idx_v_best, v_prime_best)
+    rutas[j].insert(idx_v_prime_best, v_best)
 
-    for i in range(n_rutas):
-        for j in range(i + 1, n_rutas):
-            for a in range(1, len(rutas[i]) - 1):
-                for b in range(1, len(rutas[j]) - 1):
-                    nuevas_rutas = copy.deepcopy(rutas)
-                    nuevas_rutas[i][a], nuevas_rutas[j][b] = nuevas_rutas[j][b], nuevas_rutas[i][a]
-                    graficar_solucion(nuevas_rutas, Coordenadas, "swap")
-                    costo_total_nuevas = calcular_costo_total(nuevas_rutas, Tiempos)
+def optimize_routes(rutas, Tiempos):
+    for r in rutas:
+        for r_prime in rutas:
+            if r == r_prime:
+                continue
 
-                    if costo_total_nuevas < mejor_costo_total:
-                        mejor_costo_total = costo_total_nuevas
-                        mejor_rutas = nuevas_rutas
+            for v in r:
+                top_3_v = find_top_3(v, r_prime, Tiempos)
+                if not top_3_v:
+                    continue  # No hay elementos en top_3_v
 
-    return mejor_rutas, mejor_costo_total
+                for v_prime in r_prime:
+                    top_3_v_prime = find_top_3(v_prime, r, Tiempos)
+                    if not top_3_v_prime:
+                        continue  # No hay elementos en top_3_v_prime
+
+                    delta_best = 0
+                    v_best, v_prime_best = None, None
+
+                    for v in r:
+                        for v_prime in r_prime:
+                            try:
+                                k = next(kk for kk, (i, j) in enumerate(top_3_v) if i != v_prime and j != v_prime)
+                                k_prime = next(kk for kk, (i, j) in enumerate(top_3_v_prime) if i != v and j != v)
+                            except StopIteration:
+                                continue
+
+                            delta_v_to_r_prime = min(delta(v, top_3_v[k][0], top_3_v[k][1], Tiempos),
+                                                    delta(v, v_prime, v_prime, Tiempos)) - delta(v, v, v, Tiempos)
+                            delta_v_prime_to_r = min(delta(v_prime, top_3_v_prime[k_prime][0], top_3_v_prime[k_prime][1], Tiempos),
+                                                     delta(v_prime, v, v, Tiempos)) - delta(v_prime, v_prime, v_prime, Tiempos)
+
+                            if delta_v_to_r_prime + delta_v_prime_to_r < delta_best:
+                                delta_best = delta_v_to_r_prime + delta_v_prime_to_r
+                                v_best, v_prime_best = v, v_prime
+
+                    if delta_best < 0 and v_best is not None and v_prime_best is not None:
+                        apply_swap(rutas, v_best, v_prime_best)
+
+    return rutas
 
 def asignar_clusters_a_vehiculos(clusters, Tiempos, num_vehiculos, Tiempo_Maximo_Vehiculo):
     vehiculos = [[] for _ in range(num_vehiculos)]
@@ -245,14 +276,27 @@ for ruta in rutas_TS:
     Costo_2OPT += Costo_cluster_2OPT
     rutas_2OPT.append(ruta_2OPT)
 Mejor_Costo = Costo_2OPT
-for i in range(100):
-    rutas_inter_swap, Costo_inter_swap = swap_inter_rutas(rutas_2OPT, Tiempos)
-    if Costo_inter_swap < Mejor_Costo:
-        Mejor_Costo = Costo_inter_swap
-        Mejor_Ruta = rutas_inter_swap
-    graficar_solucion(rutas_inter_swap,Coordenadas,"solucion")
 
-Asignacion_Vehiculos = asignar_clusters_a_vehiculos(Mejor_Ruta, Tiempos, v, Tiempo_Maximo_Vehiculo)
+for i in range (10):
+    rutas_optimizadas = optimize_routes(rutas, Tiempos)
+    rutas_TS = []
+    Costo_TS = 0
+    for ruta in rutas:
+        ruta_TS, Costo_cluster_TS = busqueda_tabu(Tiempos, 1000, 5, ruta)
+        Costo_TS += Costo_cluster_TS
+        rutas_TS.append(ruta_TS)
+
+    rutas_2OPT = []
+    Costo_2OPT = 0
+    for ruta in rutas_TS:
+        ruta_2OPT, Costo_cluster_2OPT = two_opt(ruta, Tiempos)
+        Costo_2OPT += Costo_cluster_2OPT
+        rutas_2OPT.append(ruta_2OPT)
+    Mejor_Costo = Costo_2OPT
+
+    graficar_solucion(rutas_2OPT,Coordenadas,"rutas optimizadas")
+
+#Asignacion_Vehiculos = asignar_clusters_a_vehiculos(Mejor_Ruta, Tiempos, v, Tiempo_Maximo_Vehiculo)
 tiempo_total = time.time() - tiempo_inicio
 
 #graficar_solucion_2OPT(Mejor_Ruta, Coordenadas)
